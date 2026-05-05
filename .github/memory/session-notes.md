@@ -209,6 +209,68 @@ Use this template when adding a new session summary:
 
 ---
 
+### Session: Incremental Frontend Implementation (Step 5-3) - 2026-05-05
+
+#### Accomplished
+- Completed 6 incomplete frontend features using TDD RED-GREEN-REFACTOR approach:
+  1. **Delete functionality**: Implemented actual DELETE API call (was only console.log)
+  2. **Edit functionality**: Full edit workflow with state management, save/cancel buttons
+  3. **Stats calculation**: Dynamic incomplete/completed counts from todos array (was hardcoded 0)
+  4. **Empty state message**: Conditional rendering when todos.length === 0
+  5. **Error handling**: Added isError/error display with MUI Alert component
+  6. **API URL**: Changed from hardcoded localhost to relative URL (/api/todos)
+- Wrote React Testing Library tests FIRST for all features (12 tests total)
+- Created 5 Playwright UI tests for critical user journeys (create, toggle, delete, edit, empty-title-error)
+- Fixed UI test selector issues (strict mode violations from test isolation problems)
+- Found and fixed application bug: Edit endpoint mismatch (frontend PATCH vs backend PUT)
+
+#### Key Findings
+- **Test Isolation in UI Tests**: Backend state persists across Playwright tests, causing duplicate todos
+  - Solution: Use `.first()` selectors and count-based assertions instead of text visibility
+  - Alternative: Add backend cleanup in beforeEach (more complex, deferred)
+- **Selector Specificity**: Complex DOM navigation (`locator('../..')`) caused strict mode violations
+  - Solution: Use direct `aria-label` selectors (`getByLabel('delete')`)
+  - Lesson: Simpler selectors = more stable tests
+- **Method Mismatch Bug**: Frontend updateTodoMutation used PATCH, backend expected PUT
+  - Root cause: Copy-paste error, tests didn't catch because mocked
+  - Solution: Changed frontend to PUT to match backend
+- **MUI Conditional Rendering**: Three patterns for showing/hiding based on state:
+  - Loading: `{isLoading && <CircularProgress />}`
+  - Error: `{isError && <Alert>...</Alert>}`
+  - Empty state: `{!isLoading && !isError && todos.length === 0 && <Card>...</Card>}`
+- **React Query Patterns**: Learned distinction between useQuery (fetch) and useMutation (modify)
+  - useQuery: Automatic refetch, caching, error/loading states
+  - useMutation: onSuccess callback triggers query invalidation
+
+#### Decisions Made
+- **Stats Calculation Pattern**: Filter array instead of maintaining separate counters
+  - Rationale: Single source of truth, no sync issues
+  - Trade-off: O(n) on each render vs O(1), acceptable for small lists
+- **Edit State Management**: Local component state (editingId, editingTitle) vs form library
+  - Rationale: Simple use case doesn't justify form library dependency
+  - Trade-off: Manual state management vs library overhead
+- **UI Test Coverage**: 5 tests max, focused on critical paths
+  - Rationale: Balance coverage with maintenance burden
+  - Deferred: Stats calculation, empty state (covered by unit tests)
+- **Empty State Messaging**: Friendly "No todos yet!" vs technical "0 items"
+  - Rationale: Better UX, encourages action
+- **Error Display**: Alert component vs inline text
+  - Rationale: MUI Alert provides visual prominence and semantic meaning
+
+#### Outcomes
+- All tests passing: 27/27 total ✅
+  - Frontend component tests: 12/12 ✅
+  - Backend API tests: 15/15 ✅  
+  - Playwright UI tests: 5/5 ✅
+- Zero lint errors (frontend + backend) ✅
+- Fully functional TODO application with all CRUD operations
+- Complete error handling and user feedback
+- Clean, maintainable code following React/Material-UI best practices
+- Discovered and documented 5 new reusable patterns (see patterns-discovered.md)
+- Ready for commit to feature/agentic-workflow branch
+
+---
+
 ## Notes
 
 - Each session entry should be added at the end of this file (reverse chronological order if preferred)

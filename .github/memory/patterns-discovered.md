@@ -204,6 +204,366 @@ app.post('/api/todos', (req, res) => {
 
 **References**:
 - Session: Fix Backend Tests with TDD (Step 5-1) - 2026-05-05
+
+---
+
+### Pattern: React Query State Management
+
+**Context**: Managing server state (fetching, creating, updating, deleting) in React applications
+
+**Problem**: Need to handle loading states, errors, automatic refetching, and cache invalidation for API calls
+
+**Solution**: Use React Query with useQuery for fetching and useMutation for modifications
+
+**Why**:
+- Automatic loading/error states eliminate manual state management
+- Built-in caching reduces unnecessary API calls
+- Query invalidation ensures UI stays in sync with server
+- Separates data fetching concerns from component rendering logic
+- Reduces boilerplate compared to useEffect + useState
+
+**Example**:
+```javascript
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+
+// Custom hook for fetching data
+const useTodos = () => {
+  return useQuery({
+    queryKey: ['todos'],
+    queryFn: async () => {
+      const response = await fetch('/api/todos');
+      if (!response.ok) {
+        throw new Error('Failed to fetch todos');
+      }
+      return response.json();
+    },
+  });
+};
+
+// In component
+function TodoApp() {
+  const queryClient = useQueryClient();
+  const { data: todos = [], isLoading, isError, error } = useTodos();
+
+  // Mutation for creating
+  const addTodoMutation = useMutation({
+    mutationFn: async (title) => {
+      const response = await fetch('/api/todos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      // Automatically refetch todos after successful creation
+      queryClient.invalidateQueries({ queryKey: ['todos'] });
+    },
+  });
+
+  // Mutation for deleting
+  const deleteTodoMutation = useMutation({
+    mutationFn: async (id) => {
+      await fetch(`/api/todos/${id}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['todos'] });
+    },
+  });
+
+  // Automatic states available
+  if (isLoading) return <CircularProgress />;
+  if (isError) return <Alert severity="error">{error.message}</Alert>;
+
+  return (
+    <div>
+      {todos.map(todo => (
+        <TodoItem 
+          key={todo.id} 
+          todo={todo} 
+          onDelete={() => deleteTodoMutation.mutate(todo.id)}
+        />
+      ))}
+    </div>
+  );
+}
+```
+
+**Key Concepts**:
+- **queryKey**: Unique identifier for caching and invalidation
+- **queryFn**: Async function that fetches data
+- **mutationFn**: Async function that modifies data
+- **onSuccess**: Callback after successful mutation (invalidate queries to refetch)
+- **Destructured states**: data, isLoading, isError, error from useQuery
+
+**Related Files**:
+- `packages/frontend/src/App.js` - useTodos hook and all mutations
+
+**References**:
+- Session: Incremental Frontend Implementation (Step 5-3) - 2026-05-05
+- React Query docs: https://tanstack.com/query/latest
+
+---
+
+### Pattern: MUI Conditional Rendering
+
+**Context**: Showing/hiding UI elements based on application state (loading, error, empty)
+
+**Problem**: Need to display different UI for loading, error, and empty states without complex conditional logic
+
+**Solution**: Use short-circuit evaluation with JSX fragments for clean conditional rendering
+
+**Why**:
+- Keeps JSX readable and declarative
+- No ternary nesting hell
+- Each condition is independent and clear
+- Easy to add/remove states
+
+**Example**:
+```javascript
+function TodoApp() {
+  const { data: todos = [], isLoading, isError, error } = useTodos();
+
+  return (
+    <Container>
+      {/* Loading state */}
+      {isLoading && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
+          <CircularProgress />
+        </Box>
+      )}
+
+      {/* Error state */}
+      {isError && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          Error loading todos: {error?.message || 'Unknown error'}
+        </Alert>
+      )}
+
+      {/* Empty state */}
+      {!isLoading && !isError && todos.length === 0 && (
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography variant="body1" color="text.secondary" align="center">
+              No todos yet! Add one above to get started.
+            </Typography>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Data state */}
+      {!isLoading && !isError && todos.length > 0 && (
+        <Card>
+          <List>
+            {todos.map(todo => <TodoItem key={todo.id} todo={todo} />)}
+          </List>
+        </Card>
+      )}
+    </Container>
+  );
+}
+```
+
+**Anti-Pattern**:
+```javascript
+// Bad - Ternary nesting
+{
+  isLoading ? (
+    <CircularProgress />
+  ) : isError ? (
+    <Alert>{error.message}</Alert>
+  ) : todos.length === 0 ? (
+    <Typography>No todos</Typography>
+  ) : (
+    <List>{todos.map(...)}</List>
+  )
+}
+// Hard to read, hard to modify
+```
+
+**Related Files**:
+- `packages/frontend/src/App.js` - All conditional UI states
+
+**References**:
+- Session: Incremental Frontend Implementation (Step 5-3) - 2026-05-05
+
+---
+
+### Pattern: Edit Mode Toggle with Local State
+
+**Context**: Implementing inline editing for list items without form library
+
+**Problem**: Need to switch between view and edit modes, preserve original value for cancel
+
+**Solution**: Use local state for editingId and editingTitle to track edit mode per item
+
+**Why**:
+- Simple use case doesn't justify form library overhead
+- Local state keeps edit mode scoped and independent
+- Cancel functionality requires preserving original value
+- One item can be edited at a time (clear UX)
+
+**Example**:
+```javascript
+function TodoApp() {
+  const [editingId, setEditingId] = useState(null);
+  const [editingTitle, setEditingTitle] = useState('');
+
+  const updateTodoMutation = useMutation({
+    mutationFn: async ({ id, title }) => {
+      const response = await fetch(`/api/todos/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['todos'] });
+      setEditingId(null); // Exit edit mode
+      setEditingTitle('');
+    },
+  });
+
+  const handleEditStart = (todo) => {
+    setEditingId(todo.id);
+    setEditingTitle(todo.title); // Preserve original for editing
+  };
+
+  const handleEditSave = (id) => {
+    if (editingTitle.trim()) {
+      updateTodoMutation.mutate({ id, title: editingTitle });
+    }
+  };
+
+  const handleEditCancel = () => {
+    setEditingId(null);
+    setEditingTitle(''); // Reset without saving
+  };
+
+  return (
+    <List>
+      {todos.map(todo => (
+        <ListItem key={todo.id}>
+          {editingId === todo.id ? (
+            // Edit mode
+            <>
+              <TextField
+                value={editingTitle}
+                onChange={(e) => setEditingTitle(e.target.value)}
+              />
+              <IconButton onClick={() => handleEditSave(todo.id)} aria-label="save">
+                <SaveIcon />
+              </IconButton>
+              <IconButton onClick={handleEditCancel} aria-label="cancel">
+                <CancelIcon />
+              </IconButton>
+            </>
+          ) : (
+            // View mode
+            <>
+              <Typography>{todo.title}</Typography>
+              <IconButton onClick={() => handleEditStart(todo)} aria-label="edit">
+                <EditIcon />
+              </IconButton>
+            </>
+          )}
+        </ListItem>
+      ))}
+    </List>
+  );
+}
+```
+
+**Key Points**:
+- **editingId**: Tracks which item is being edited (null = none)
+- **editingTitle**: Stores the edited value (separate from original)
+- **handleEditStart**: Sets edit mode with original value
+- **handleEditSave**: Submits if valid, clears state on success
+- **handleEditCancel**: Exits edit mode without saving
+
+**Related Files**:
+- `packages/frontend/src/App.js` - Edit mode implementation
+
+**References**:
+- Session: Incremental Frontend Implementation (Step 5-3) - 2026-05-05
+
+---
+
+### Pattern: Playwright Selector Stability
+
+**Context**: Writing UI tests that don't break when multiple elements exist
+
+**Problem**: Playwright strict mode fails when selectors match multiple elements, especially with test state accumulation
+
+**Solution**: Use accessible selectors (aria-label, role) and .first() for duplicate handling
+
+**Why**:
+- Accessible selectors align with how users interact (screen readers, keyboards)
+- .first() safely handles duplicates from test isolation issues
+- Simpler selectors are more maintainable than complex DOM navigation
+- Matches testing-library philosophy (test like users interact)
+
+**Example**:
+```javascript
+// Good - Stable, accessible selectors
+class TodoPage {
+  async deleteTodo(title) {
+    const todoItem = this.page.getByText(title).first(); // Handle duplicates
+    const listItem = todoItem.locator('..');  // One parent up
+    const deleteButton = listItem.getByLabel('delete'); // Accessible selector
+    await deleteButton.click();
+  }
+
+  async getTodos() {
+    return this.page.getByText(title).first(); // Always get first match
+  }
+}
+
+// Test assertions
+test('user can create todo', async ({ page }) => {
+  await todoPage.addTodo('Buy groceries');
+  
+  // Use .first() to avoid strict mode violations
+  await expect(page.getByText('Buy groceries').first()).toBeVisible();
+});
+```
+
+**Anti-Pattern**:
+```javascript
+// Bad - Complex DOM navigation, brittle
+const deleteButton = page
+  .getByText(title)
+  .locator('../..')  // Navigate up two levels
+  .getByRole('button')  // Matches ALL buttons in subtree
+  .filter({ has: page.locator('[data-testid="DeleteIcon"]') });
+// Strict mode violation when multiple todos exist!
+
+// Bad - Selector without .first()
+await expect(page.getByText('Todo')).toBeVisible();
+// Fails if 2+ todos with same title exist
+```
+
+**Best Practices**:
+- **Selector priority**: getByRole > getByLabel > getByTestId > locator()
+- **Use .first()** when duplicates expected from test accumulation
+- **Keep navigation minimal**: One .locator('..') max
+- **Prefer aria-labels** over traversing DOM structure
+
+**Related Files**:
+- `packages/frontend/tests/ui/pages/TodoPage.js` - Page object with stable selectors
+- `packages/frontend/tests/ui/e2e.spec.js` - Test assertions using .first()
+
+**References**:
+- Session: Incremental Frontend Implementation (Step 5-3) - 2026-05-05
+- Playwright best practices: https://playwright.dev/docs/best-practices
+
+**Related Files**:
+- `packages/backend/src/app.js` - All API endpoints
+- `packages/backend/__tests__/app.test.js` - Status code assertions
+
+**References**:
+- Session: Fix Backend Tests with TDD (Step 5-1) - 2026-05-05
 - Commit: 0fb7ead
 
 ---
