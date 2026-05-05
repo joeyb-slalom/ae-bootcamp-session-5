@@ -23,8 +23,8 @@ test.describe('TODO Application - Critical User Journeys', () => {
     
     await todoPage.addTodo(todoTitle);
     
-    // Verify todo appears in the list
-    await expect(page.getByText(todoTitle)).toBeVisible();
+    // Verify todo appears in the list (use first to handle duplicates from test accumulation)
+    await expect(page.getByText(todoTitle).first()).toBeVisible();
     
     // Verify todo count increased
     const count = await todoPage.getTodoCount();
@@ -66,42 +66,42 @@ test.describe('TODO Application - Critical User Journeys', () => {
     // Create a todo first
     await todoPage.addTodo(todoTitle);
     
-    // Verify it exists
-    await expect(page.getByText(todoTitle)).toBeVisible();
+    // Verify it exists (use first to handle duplicates)
+    await expect(page.getByText(todoTitle).first()).toBeVisible();
+    
+    // Get count before delete
+    const countBeforeDelete = await todoPage.getTodoCount();
     
     // Delete the todo
     await todoPage.deleteTodo(todoTitle);
     
-    // Verify todo is removed from the list
-    await expect(page.getByText(todoTitle)).not.toBeVisible();
+    // Verify todo count decreased
+    const countAfterDelete = await todoPage.getTodoCount();
+    expect(countAfterDelete).toBe(countBeforeDelete - 1);
   });
 
   /**
    * Test 4: Edit Todo (Happy Path - P0)
-   * Validates that users can initiate edit action
-   * Note: Full edit implementation may not be complete
+   * Validates that users can edit and save todo titles
    */
-  test('user can click edit button on todo', async ({ page }) => {
-    const todoTitle = 'Task to edit';
+  test('user can edit and save a todo', async ({ page }) => {
+    const originalTitle = 'Task to edit';
+    const updatedTitle = 'Updated task title';
     
     // Create a todo first
-    await todoPage.addTodo(todoTitle);
+    await todoPage.addTodo(originalTitle);
     
-    // Set up console listener to verify edit button functionality
-    const consoleLogs = [];
-    page.on('console', msg => {
-      if (msg.type() === 'log') {
-        consoleLogs.push(msg.text());
-      }
-    });
+    // Verify original title exists (use first to handle duplicates)
+    await expect(page.getByText(originalTitle).first()).toBeVisible();
     
-    // Click edit button
-    await todoPage.clickEditTodo(todoTitle);
+    // Edit the todo
+    await todoPage.editTodo(originalTitle, updatedTitle);
     
-    // Verify edit action was triggered
-    // (Current implementation logs to console)
-    await page.waitForTimeout(100);
-    expect(consoleLogs.some(log => log.includes('Edit not implemented'))).toBe(true);
+    // Verify new title is visible (use first to handle duplicates)
+    await expect(page.getByText(updatedTitle).first()).toBeVisible();
+    
+    // Verify we're no longer in edit mode (save button should be gone)
+    await expect(page.getByRole('button', { name: /save/i })).not.toBeVisible();
   });
 
   /**
