@@ -1,0 +1,5 @@
+# Ignore all files in scratch/ directory
+# This directory is for ephemeral working notes during active development
+# Notes should be summarized into session-notes.md at end of session
+
+*
